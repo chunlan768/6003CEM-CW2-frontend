@@ -2,17 +2,18 @@ import React, { useEffect, useState } from 'react';
 import api from '../services/api';
 import { Hotel } from '../types/Hotel';
 import { useAuth } from '../context/AuthContext';
+import { Button, Typography, Card, CardContent, Grid, Alert, Container } from '@mui/material';
 
 const Favorites: React.FC = () => {
+  const { user } = useAuth();
   const [favorites, setFavorites] = useState<Hotel[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const { user } = useAuth();
 
-useEffect(() => {
-  if (user?.role === 'user') { // 改為 'user'
-    fetchFavorites();
-  }
-}, []);
+  useEffect(() => {
+    if (user?.role === 'user') {
+      fetchFavorites();
+    }
+  }, [user]);
 
   const fetchFavorites = async () => {
     try {
@@ -20,57 +21,49 @@ useEffect(() => {
       setFavorites(response.data);
       setError(null);
     } catch (err: any) {
-      setError('Failed to fetch favorites');
+      setError('加載收藏失敗');
     }
   };
 
-const addFavorite = async (hotelId: string) => {
-  if (user?.role === 'user') { // 改為 'user'
-    try {
-      await api.post('/favorites', { hotelId });
-      fetchFavorites();
-    } catch (err: any) {
-      setError('無法添加收藏');
+  const addFavorite = async (hotelId: string) => {
+    if (user?.role === 'user') {
+      try {
+        await api.post('/favorites/add', { hotelId });
+        fetchFavorites();
+      } catch (err: any) {
+        setError('添加收藏失敗');
+      }
     }
-  }
-};
+  };
 
-const removeFavorite = async (hotelId: string) => {
-  if (user?.role === 'user') { // 改為 'user'
-    try {
-      await api.delete(`/favorites/${hotelId}`);
-      fetchFavorites();
-    } catch (err: any) {
-      setError('無法移除收藏');
+  const removeFavorite = async (hotelId: string) => {
+    if (user?.role === 'user') {
+      try {
+        await api.delete('/favorites/remove', { data: { hotelId } });
+        fetchFavorites();
+      } catch (err: any) {
+        setError('移除收藏失敗');
+      }
     }
-  }
-};
+  };
 
   return (
-    <div style={{ margin: '20px' }}>
-      <h2>Favorites</h2>
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-      {user?.role === 'public' && (
-        <button
-          onClick={() => addFavorite('someHotelId')}
-          style={{ padding: '8px', backgroundColor: '#007bff', color: 'white', border: 'none', marginBottom: '10px' }}
-        >
-          Add Favorite
-        </button>
-      )}
-      <ul style={{ listStyle: 'none', padding: 0 }}>
+    <Container sx={{ py: 4 }}>
+      <Typography variant="h4" align="center">我的最愛</Typography>
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      <Grid container spacing={3}>
         {favorites.map((fav) => (
-          <li key={fav._id} style={{ padding: '10px', borderBottom: '1px solid #ddd', display: 'flex', justifyContent: 'space-between' }}>
-            {fav.name}
-            {user?.role === 'public' && (
-              <button onClick={() => removeFavorite(fav._id)} style={{ padding: '5px', marginLeft: '10px', backgroundColor: '#dc3545', color: 'white', border: 'none' }}>
-                Remove
-              </button>
-            )}
-          </li>
+          <Grid item xs={12} sm={6} md={4} key={fav._id}>
+            <Card>
+              <CardContent>
+                <Typography>{fav.name}</Typography>
+                <Button onClick={() => removeFavorite(fav._id)}>移除</Button>
+              </CardContent>
+            </Card>
+          </Grid>
         ))}
-      </ul>
-    </div>
+      </Grid>
+    </Container>
   );
 };
 

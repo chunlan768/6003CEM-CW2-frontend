@@ -2,21 +2,24 @@ import React, { useState, useEffect } from 'react';
 import api from '../services/api';
 import { Message } from '../types/Message';
 import { useAuth } from '../context/AuthContext';
+import { Button, Typography, TextField, List, ListItem, ListItemText, Dialog, DialogTitle, DialogContent, DialogActions, Container, Alert } from '@mui/material';
 
 const Messages: React.FC = () => {
+  const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [content, setContent] = useState('');
   const [receiverId, setReceiverId] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const { user } = useAuth();
+  const [reply, setReply] = useState('');
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
 
   useEffect(() => {
-    if (user?.role === 'operator') {
+    if (user?.role === 'user' || user?.role === 'operator') {
       const interval = setInterval(fetchMessages, 5000);
       fetchMessages();
       return () => clearInterval(interval);
     }
-  }, []);
+  }, [user]);
 
   const fetchMessages = async () => {
     try {
@@ -24,32 +27,35 @@ const Messages: React.FC = () => {
       setMessages(response.data);
       setError(null);
     } catch (err: any) {
-      setError('Failed to fetch messages');
+      setError('加載消息失敗');
     }
   };
 
-const sendMessage = async () => {
-  if (user?.role === 'user') { // 改為 'user'
-    try {
-      await api.post('/messages', { receiverId, content });
-      setContent('');
-      fetchMessages();
-    } catch (err: any) {
-      setError('無法發送訊息');
+  const sendMessage = async () => {
+    if (user?.role === 'user') {
+      try {
+        await api.post('/messages', { receiverId, content });
+        setContent('');
+        setReceiverId('');
+        fetchMessages();
+      } catch (err: any) {
+        setError('發送消息失敗');
+      }
     }
-  }
-};
+  };
 
-const replyMessage = async (id: string, newContent: string) => {
-  if (user?.role === 'operator') {
-    try {
-      await api.put(`/messages/${id}`, { content: newContent });
-      fetchMessages();
-    } catch (err: any) {
-      setError('無法回覆訊息');
+  const replyMessage = async () => {
+    if (replyTo && user?.role === 'operator') {
+      try {
+        await api.put(`/messages/${replyTo._id}`, { content: reply });
+        setReply('');
+        setReplyTo(null);
+        fetchMessages();
+      } catch (err: any) {
+        setError('回复消息失敗');
+      }
     }
-  }
-};
+  };
 
   const deleteMessage = async (id: string) => {
     if (user?.role === 'operator') {
@@ -57,61 +63,46 @@ const replyMessage = async (id: string, newContent: string) => {
         await api.delete(`/messages/${id}`);
         fetchMessages();
       } catch (err: any) {
-        setError('Failed to delete message');
+        setError('刪除消息失敗');
       }
     }
   };
 
   return (
-    <div style={{ margin: '20px' }}>
-      <h2>Messages</h2>
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-      {user?.role === 'public' && (
+    <Container sx={{ py: 4 }}>
+      <Typography variant="h4">消息</Typography>
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {user?.role === 'user' && (
         <div style={{ marginBottom: '20px' }}>
-          <input
-            value={receiverId}
-            onChange={(e) => setReceiverId(e.target.value)}
-            placeholder="Receiver ID"
-            style={{ padding: '8px', marginRight: '10px' }}
-          />
-          <input
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            placeholder="Message"
-            style={{ padding: '8px', marginRight: '10px' }}
-          />
-          <button
-            onClick={sendMessage}
-            style={{ padding: '8px', backgroundColor: '#007bff', color: 'white', border: 'none' }}
-          >
-            Send
-          </button>
+          <TextField label="接收者 ID" value={receiverId} onChange={(e) => setReceiverId(e.target.value)} sx={{ mr: 1 }} />
+          <TextField label="消息內容" value={content} onChange={(e) => setContent(e.target.value)} sx={{ mr: 1 }} />
+          <Button variant="contained" onClick={sendMessage}>發送</Button>
         </div>
       )}
-      <ul style={{ listStyle: 'none', padding: 0 }}>
+      <List>
         {messages.map((msg) => (
-          <li key={msg._id} style={{ padding: '10px', borderBottom: '1px solid #ddd' }}>
-            {msg.content} (From: {msg.senderId})
+          <ListItem key={msg._id}>
+            <ListItemText primary={msg.content} secondary={`從 ${msg.senderId} 發送於 ${msg.timestamp}`} />
             {user?.role === 'operator' && (
               <>
-                <button
-                  onClick={() => replyMessage(msg._id, 'Reply content')}
-                  style={{ padding: '5px', marginLeft: '10px', backgroundColor: '#28a745', color: 'white', border: 'none' }}
-                >
-                  Reply
-                </button>
-                <button
-                  onClick={() => deleteMessage(msg._id)}
-                  style={{ padding: '5px', marginLeft: '10px', backgroundColor: '#dc3545', color: 'white', border: 'none' }}
-                >
-                  Delete
-                </button>
+                <Button onClick={() => setReplyTo(msg)}>回复</Button>
+                <Button onClick={() => deleteMessage(msg._id)}>刪除</Button>
               </>
             )}
-          </li>
+          </ListItem>
         ))}
-      </ul>
-    </div>
+      </List>
+      <Dialog open={!!replyTo} onClose={() => setReplyTo(null)}>
+        <DialogTitle>回复消息</DialogTitle>
+        <DialogContent>
+          <TextField label="回复內容" value={reply} onChange={(e) => setReply(e.target.value)} fullWidth />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={replyMessage}>提交</Button>
+          <Button onClick={() => setReplyTo(null)}>取消</Button>
+        </DialogActions>
+      </Dialog>
+    </Container>
   );
 };
 
